@@ -8,4 +8,9 @@
         public int CRU { get; set; }
         public string ProccesPath { get; set; }
     }
+
+    public class ProcessInfo : SimpleProcess
+    {
+    }
+
 }

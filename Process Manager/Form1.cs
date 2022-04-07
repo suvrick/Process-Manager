@@ -17,32 +17,41 @@ namespace Process_Manager
        
         MyLogger log;
         Worker worker;
+        ProcessManager processManager;
+
+
         public Form1()
         {
             InitializeComponent();
-        }
 
-        private void worker_ChangeStatusEvent(string status)
-        {
-            statusStrip1.Invoke(new Action(() => { 
-                toolStripStatusLabel1.Text = status;
-            }));
+            log = MyLogger.GetInstance();
         }
 
         private void Application_ApplicationExit(object sender, EventArgs e)
         {
+            //Убиваем поток, при закрытие приложения 
             worker.Close();
         }
 
-        private void worker_UpdateDataEvent(List<SimpleProcess> data)
+        private void processManager_UpdateDataEvent(List<SimpleProcess> data)
         {
             if (data.Count == 0)
                 return;
 
-            dataGridView1.Invoke(new Action(() =>
+            try
             {
-                UpdateRows(data);
-            }));
+                dataGridView1.Invoke(new Action(() =>
+                {
+                    UpdateRows(data);
+                }));
+
+                if(toolStripMenuItem5.Enabled)
+                    toolStripStatusLabel2.Text = "Таблица обновлена";
+            }
+            catch (Exception ex)
+            {
+                log.Write($"Ошибка обновление datagridview.{ex.Message}");
+            }
         }
 
         public void UpdateRows(List<SimpleProcess> processes)
@@ -66,17 +75,17 @@ namespace Process_Manager
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            log = new MyLogger();
-
-            worker = new Worker(log);
-            worker.UpdateDataEvent += worker_UpdateDataEvent;
-            worker.ChangeStatusEvent += worker_ChangeStatusEvent;
-            worker.Run();
-
             Application.ApplicationExit += Application_ApplicationExit;
 
-            toolStripMenuItem4.Enabled = false;
+            processManager = new ProcessManager(log);
+            processManager.UpdateDataEvent += processManager_UpdateDataEvent;
 
+            worker = new Worker(processManager.UpdateProcessesList, log);
+            worker.Run();
+
+
+            toolStripMenuItem4.Enabled = false;
+            toolStripStatusLabel2.Text = "Инициализация данных";
         }
 
         // Start
@@ -84,7 +93,8 @@ namespace Process_Manager
         {
             toolStripMenuItem4.Enabled = false;
             toolStripMenuItem5.Enabled = true;
-            worker.Start();
+            toolStripStatusLabel2.Text = "Получение данных";
+            worker.Resume();
         }
 
         // Stop
@@ -92,7 +102,8 @@ namespace Process_Manager
         {
             toolStripMenuItem5.Enabled = false;
             toolStripMenuItem4.Enabled = true;
-            worker.Stop();
+            toolStripStatusLabel2.Text = "Обновление данных приостановлено";
+            worker.Pause();
         }
 
         // Exit
@@ -101,5 +112,18 @@ namespace Process_Manager
             Application.Exit();
         }
 
+        private void dataGridView1_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
+        {
+            var index = e.RowIndex;
+
+            var value = dataGridView1.Rows[index].Cells[0].Value;
+
+            if (value == null)
+                return;
+
+            var processID = int.Parse(value.ToString());
+
+            new Form2(processID).ShowDialog();
+        }
     }
 }

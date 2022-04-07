@@ -13,70 +13,67 @@ namespace Process_Manager
         ILogger _logger;
         Thread _thread;
         bool _pause;
+        bool _exit;
         int _delay = 100;
+        Action _action;
 
-        public delegate void UpdateData(List<SimpleProcess> data);
-        public delegate void ChangeStatus(string status);
-        public event UpdateData UpdateDataEvent;
-        public event ChangeStatus ChangeStatusEvent;
-
-
-        public Worker(ILogger logger)
+        public Worker(Action action, ILogger logger = null)
         {
+            _action = action;
             _logger = logger;
-            _logger.Write("Запуск менеджера процессов");
         }
 
         public void Run()
         {
-            _thread = new Thread(Do);
-            _thread.Start();            
-            ChangeStatusEvent?.Invoke("Иницилизация...");
+            try
+            {
+                _logger?.Write("Запуск воркера");
+                _thread = new Thread(Do);
+                _thread.Start();
+            }
+            catch (Exception ex)
+            {
+                _logger?.Write($"Не удалось запустить поток.{ex.Message}");
+            }
         }
 
         public void Close()
         {
-            _logger.Write("Закрытие потока");
-            _thread.Abort();
+            _logger?.Write("Закрытие потока");
+            try
+            {
+                _exit = true;
+                _thread.Abort();
+            }
+            catch (Exception ex)
+            {
+                _logger?.Write($"Ошибка при закрытие потока.{ex.Message}");
+            }
         }
 
-        public void Start()
+        public void Resume()
         {
-            _logger.Write("Запуск потока");
+            _logger?.Write("Запуск потока");
             _pause = false;
         }
 
-        public void Stop()
-        {        
-            _logger.Write("Пауза");
+        public void Pause()
+        {
+            _logger?.Write("Пауза");
             _pause = true;
         }
 
         void Do()
         {
-            var processManager = new ProcessManager();
-
-            while (_thread != null)
+            while (!_exit)
             {
-
                 Thread.Sleep(_delay);
 
                 if (_pause)
-                {
-                    ChangeStatusEvent?.Invoke("Пауза");
                     continue;
-                }
 
-                ChangeStatusEvent?.Invoke("Получение списка процессов");
-
-                processManager.GetProcesses();
-
-                UpdateDataEvent?.Invoke(processManager.Processes);
-
-                ChangeStatusEvent?.Invoke("Обновление данных");
+                _action();
             }
         }
-
-
     }
 }

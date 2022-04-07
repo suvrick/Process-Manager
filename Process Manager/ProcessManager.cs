@@ -9,9 +9,15 @@ namespace Process_Manager
 {
     public class ProcessManager
     {
-        public List<SimpleProcess> Processes { get; set; } = new List<SimpleProcess>();
+        ILogger _logger;
+        public ProcessManager(ILogger log = null)
+        {
+            _logger = log;
+        }
+
+        List<SimpleProcess> Processes { get; set; } = new List<SimpleProcess>();
         
-        public void GetProcesses()
+        public void UpdateProcessesList()
         {
             var processes = Process.GetProcesses();
 
@@ -20,13 +26,29 @@ namespace Process_Manager
             for (int i = 0; i < processes.Length; i++)
             {
                 var process = processes[i];
-
-                
-
+               
                 int id = process.Id;
                 string name = process.ProcessName;
-                int ram = getRAM(name);
-                int cru = getCRU(name);
+
+                int ram = 0, cru = 0;
+
+                try
+                {
+                    ram = getRAM(name);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Write($"Исключение при получении память процесса {name}.{ex.Message}");
+                }
+
+                try
+                {
+                    ram = getCRU(name);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Write($"Исключение при получении времени процесса {name}.{ex.Message}");
+                }
 
                 Processes.Add(new SimpleProcess() {
                     Id = id,
@@ -35,9 +57,18 @@ namespace Process_Manager
                     ProcessName = name,
                     RAM = ram
                 });
+
+
             }
+
+            UpdateDataEvent?.Invoke(Processes);
         }
 
+        public void GetProcessById(int processID) {
+            ChangeProcessInfoEvent?.Invoke(new ProcessInfo() { 
+                Id=processID,
+            });
+        }
 
         int getRAM(string name)
         {
@@ -64,5 +95,11 @@ namespace Process_Manager
             }
             return cru;
         }
+
+
+        public delegate void UpdateData(List<SimpleProcess> data);
+        public delegate void ChangeProcessInfo(ProcessInfo processInfo);
+        public event UpdateData UpdateDataEvent;
+        public event ChangeProcessInfo ChangeProcessInfoEvent;
     }
 }
