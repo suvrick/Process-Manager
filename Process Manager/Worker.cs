@@ -8,38 +8,57 @@ using System.Threading.Tasks;
 
 namespace Process_Manager
 {
+    /// <summary>
+    /// Обвертка над системным классом Thread.Запускает переданный метод в отдельном потоке и вызывает его в цикле с заданой задержкой.
+    /// Если задержка равна 0 - метод выполнится только единожды. 
+    /// </summary>
+
     internal class Worker
     {
         ILogger _logger;
         Thread _thread;
         bool _pause;
         bool _exit;
-        int _delay = 100;
+        int _delay;
         Action _action;
 
-        public Worker(Action action, ILogger logger = null)
+        /// <summary>
+        /// Обвертка над системным классом Thread.Запускает переданный метод в отдельном потоке и вызывает его в цикле с заданой задержкой.
+        /// Если задержка равна 0 - метод выполнится только единожды. 
+        /// </summary>
+        /// <param name="action">Метод для вызова в отдельном потоке</param>
+        /// <param name="logger">Объект реализующий интерфейс ILogger</param>
+        /// <param name="delay">Интервал задержки вызова action метода</param>
+        public Worker(Action action, ILogger logger = null, int delay = 0)
         {
             _action = action;
+            _delay = delay;
             _logger = logger;
         }
 
+        /// <summary>
+        /// Запуск воркера.
+        /// </summary>
         public void Run()
         {
             try
             {
-                _logger?.Write("Запуск воркера");
                 _thread = new Thread(Do);
+                _logger?.Info($"Запуск воркера.ThreadId: {_thread.ManagedThreadId}");
                 _thread.Start();
             }
             catch (Exception ex)
             {
-                _logger?.Write($"Не удалось запустить поток.{ex.Message}");
+                _logger?.Error($"Не удалось запустить поток.{ex.Message}");
             }
         }
 
+        /// <summary>
+        /// Останавливает вызов переданного метода.Закрывает поток.
+        /// </summary>
         public void Close()
         {
-            _logger?.Write("Закрытие потока");
+            _logger?.Info($"Закрытие воркера.ThreadId: {_thread.ManagedThreadId}");
             try
             {
                 _exit = true;
@@ -47,25 +66,32 @@ namespace Process_Manager
             }
             catch (Exception ex)
             {
-                _logger?.Write($"Ошибка при закрытие потока.{ex.Message}");
+                _logger?.Error($"Ошибка при закрытие потока.{ex.Message}");
             }
         }
 
+        /// <summary>
+        /// Возобновляет работу воркера.
+        /// </summary>
         public void Resume()
         {
-            _logger?.Write("Запуск потока");
+            _logger?.Info($"Возобновление работы воркера.ThreadId: {_thread.ManagedThreadId}");
             _pause = false;
         }
 
+        /// <summary>
+        /// Приостановливает работу воркера.
+        /// </summary>
         public void Pause()
         {
-            _logger?.Write("Пауза");
+            _logger?.Info($"Воркер приостановлен.ThreadId: {_thread.ManagedThreadId}");
             _pause = true;
         }
 
         void Do()
         {
-            while (!_exit)
+
+            do
             {
                 Thread.Sleep(_delay);
 
@@ -73,7 +99,11 @@ namespace Process_Manager
                     continue;
 
                 _action();
-            }
+
+
+            } while (_exit != true && _delay != 0);
+
+            _logger?.Info($"Do successed! ThreadId: {_thread.ManagedThreadId}");
         }
     }
 }

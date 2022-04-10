@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
+using System.Management.Automation;
+using System.Management.Automation.Runspaces;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -10,95 +13,110 @@ namespace Process_Manager
     public class ProcessManager
     {
         ILogger _logger;
+        List<ProcessProperty> Processes { get; set; } = new List<ProcessProperty>();
+
         public ProcessManager(ILogger log = null)
         {
             _logger = log;
         }
 
-        List<SimpleProcess> Processes { get; set; } = new List<SimpleProcess>();
-        
         public void UpdateProcessesList()
         {
-            var processes = Process.GetProcesses();
-
             Processes.Clear();
 
-            for (int i = 0; i < processes.Length; i++)
+            using (var r = RunspaceFactory.CreateRunspace())
             {
-                var process = processes[i];
-               
-                int id = process.Id;
-                string name = process.ProcessName;
+                r.Open();
 
-                int ram = 0, cru = 0;
-
-                try
+                using (var ps = PowerShell.Create())
                 {
-                    ram = getRAM(name);
+                    ps.Commands.AddCommand("Get-Process");
+                    var results = ps.Invoke();
+
+    
+
+                    foreach (PSObject obj in results)
+                    {
+                        var prop = new ProcessProperty();
+                        prop.Id = Convert.ToInt32(obj.Members["Id"].Value);
+                        prop.ProcessName = obj.Members["Name"].Value.ToString();
+                        prop.NPM = Convert.ToInt64(obj.Members["NPM"].Value.ToString()) / (1024 * 10);
+                        prop.PM = Convert.ToInt64(obj.Members["PM"].Value.ToString()) / (1024 * 10);
+                        prop.WS = Convert.ToInt64(obj.Members["WS"].Value.ToString()) / (1024 * 10);
+                        prop.VM = Convert.ToInt64(obj.Members["VM"].Value.ToString()) / (1024 * 1024 * 1024);
+                        Processes.Add(prop);
+                    }
+
+                    UpdateDataEvent?.Invoke(Processes);     
                 }
-                catch (Exception ex)
+            }
+        }
+
+        public void GetProcessById(int processID)
+        {
+            var prop = new ProcessProperty();
+
+            using (var r = RunspaceFactory.CreateRunspace())
+            {
+                r.Open();
+
+                using (var ps = PowerShell.Create())
                 {
-                    _logger.Write($"Исключение при получении память процесса {name}.{ex.Message}");
+                    ps.Commands.AddCommand("Get-Process");
+                    ps.Commands.AddParameter("Id", processID);
+
+                    var results = ps.Invoke();
+
+
+                    foreach (PSObject obj in results)
+                    {
+                        prop.Id = Convert.ToInt32(obj.Members["Id"].Value);
+                        prop.ProcessName = obj.Members["Name"].Value.ToString();
+                        prop.NPM = Convert.ToInt64(obj.Members["NPM"].Value.ToString()) / (1024 * 10);
+                        prop.PM = Convert.ToInt64(obj.Members["PM"].Value.ToString()) / (1024 * 10);
+                        prop.WS = Convert.ToInt64(obj.Members["WS"].Value.ToString()) / (1024 * 10);
+                        prop.VM = Convert.ToInt64(obj.Members["VM"].Value.ToString()) / (1024 * 1024 * 1024);
+                    }
                 }
-
-                try
-                {
-                    ram = getCRU(name);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Write($"Исключение при получении времени процесса {name}.{ex.Message}");
-                }
-
-                Processes.Add(new SimpleProcess() {
-                    Id = id,
-                    CRU = cru,
-                    ProccesPath = "",
-                    ProcessName = name,
-                    RAM = ram
-                });
-
-
             }
 
-            UpdateDataEvent?.Invoke(Processes);
+            ChangeProcessInfoEvent?.Invoke(prop);
         }
 
-        public void GetProcessById(int processID) {
-            ChangeProcessInfoEvent?.Invoke(new ProcessInfo() { 
-                Id=processID,
-            });
-        }
-
-        int getRAM(string name)
+        int getRAM(PSObject obj)
         {
             int ram = 0;
-            using (var PC = new PerformanceCounter())
+            try
             {
-                PC.CategoryName = "Process";
-                PC.CounterName = "Working Set - Private";
-                PC.InstanceName = name;
-                ram = Convert.ToInt32(PC.NextValue()) / (int)(1024);
+                ram = Convert.ToInt32(obj.Members["NPM"].Value);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
             }
             return ram;
         }
 
-        int getCRU(string name)
+        int getCPU(PSObject obj)
         {
-            int cru = 0;
-            using (var PC = new PerformanceCounter("Process", "% Processor Time", name, true))
+            int cpu = 0;
+            try
             {
-                for(int i = 0; i < 3; i++)
-                {
-                    cru = (int)PC.NextValue();
-                }
+                //this.TotalProcessorTime.TotalSeconds
+                //var o = obj.Members["CPU"];
+                var m = obj.Properties["CPU"];
+                
+                cpu = Convert.ToInt32(m.Value);
             }
-            return cru;
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            return cpu;
         }
 
-
-        public delegate void UpdateData(List<SimpleProcess> data);
-        public delegate void ChangeProcessInfo(ProcessInfo processInfo);
+        public delegate void UpdateData(List<ProcessProperty> data);
+        public delegate void ChangeProcessInfo(ProcessProperty processInfo);
         public event UpdateData UpdateDataEvent;
         public event ChangeProcessInfo ChangeProcessInfoEvent;
     }

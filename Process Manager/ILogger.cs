@@ -8,6 +8,8 @@ namespace Process_Manager
 {
     public interface ILogger
     {
-        void Write(string message);
+        void Info(string message);
+        void Warnning(string message);
+        void Error(string message);
     }
 }
