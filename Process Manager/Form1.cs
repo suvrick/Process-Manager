@@ -13,12 +13,14 @@ using System.Windows.Forms;
 
 namespace Process_Manager
 {
+
     public partial class Form1 : Form
     {
        
         MyLogger log;
         Worker worker;
         int delay = 1000;
+        bool marker;
         ProcessManager processManager;
 
         public Form1()
@@ -90,6 +92,7 @@ namespace Process_Manager
                         dataGridView1.Rows[x].Cells[3].Value = item.PM;
                         dataGridView1.Rows[x].Cells[4].Value = item.WS;
                         dataGridView1.Rows[x].Cells[5].Value = item.VM;
+                        dataGridView1.Rows[x].Tag = marker;
                         break;
                     }
                 }
@@ -104,13 +107,30 @@ namespace Process_Manager
                     dataGridView1.Rows[last_index].Cells[3].Value = item.PM;
                     dataGridView1.Rows[last_index].Cells[4].Value = item.WS;
                     dataGridView1.Rows[last_index].Cells[5].Value = item.VM;
+                    dataGridView1.Rows[last_index].Tag = marker;
 
                     log.Info($"Добавлен новый процесс ID:{item.Id}, Name: {item.ProcessName}");
                 }
 
             }
 
+            Remove();
+
             dataGridView1.Refresh();
+            marker = !marker;
+        }
+
+        private void Remove()
+        {
+            for (int i = 0; i < dataGridView1.Rows.Count; i++)
+            {
+                var item = dataGridView1.Rows[i];
+                if (item.Tag.ToString() != marker.ToString() )
+                {
+                    dataGridView1.Rows.RemoveAt(i);
+                    log.Info($"Процесс закрыт. ID:{item.Cells[1].Value}, Name: {item.Cells[0].Value}");
+                }
+            }
         }
 
         private void Form1_Load(object sender, EventArgs e)
